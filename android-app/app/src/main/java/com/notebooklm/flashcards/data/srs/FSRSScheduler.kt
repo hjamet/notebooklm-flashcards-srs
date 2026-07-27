@@ -164,8 +164,8 @@ object FSRSScheduler {
     }
 
     private fun nextRecallStability(d: Double, s: Double, r: Double, rating: Int): Double {
-        val hardPenalty = if (rating == Rating.HARD) w[15] else 1.0
-        val easyBonus = if (rating == Rating.EASY) w[16] else 1.0
+        val hardPenalty = if (rating == Rating.HARD.value) w[15] else 1.0
+        val easyBonus = if (rating == Rating.EASY.value) w[16] else 1.0
         val sRecall = s * (1.0 + exp(w[8]) * (11.0 - d) * s.pow(-w[9]) * (exp(w[10] * (1.0 - r)) - 1.0) * hardPenalty * easyBonus)
         return max(0.1, sRecall)
     }
