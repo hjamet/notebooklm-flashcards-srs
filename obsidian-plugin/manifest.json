@@ -1,0 +1,10 @@
+{
+  "id": "notebooklm-flashcards-srs",
+  "name": "NotebookLM Flashcards SRS",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Spaced repetition flashcards imported from NotebookLM exports with FSRS algorithm and Obsidian Sync integration.",
+  "author": "Henri Jamet",
+  "authorUrl": "https://github.com",
+  "isDesktopOnly": false
+}

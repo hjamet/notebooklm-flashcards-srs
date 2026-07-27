@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+obsidian-plugin/node_modules/
+.pnpm-store/
+
+# Build outputs
+obsidian-plugin/main.js
+dist/
+build/
+*.apk
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Android build outputs
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/*.iml
+.gradle/
