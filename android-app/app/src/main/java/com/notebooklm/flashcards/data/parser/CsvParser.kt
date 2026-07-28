@@ -13,8 +13,9 @@ object CsvParser {
 
     /**
      * Parses a CSV text strictly following RFC 4180 rules.
+     * Supports columns: Question, Answer, Context, Source/Deck.
      */
-    fun parseCsv(csvText: String, deckName: String): ParseResult {
+    fun parseCsv(csvText: String, defaultDeckName: String): ParseResult {
         val records = parseRawCsvRecords(csvText)
         if (records.isEmpty()) {
             return ParseResult(emptyList(), 0, listOf("Le fichier CSV est vide"))
@@ -27,6 +28,24 @@ object CsvParser {
         // Check if first line is header
         val firstRow = records.first()
         val hasHeader = isHeaderRow(firstRow)
+        
+        var questionCol = 0
+        var answerCol = 1
+        var contextCol = if (firstRow.size > 2) 2 else -1
+        var deckCol = if (firstRow.size > 3) 3 else -1
+
+        if (hasHeader) {
+            firstRow.forEachIndexed { colIdx, header ->
+                val h = header.trim().lowercase()
+                when {
+                    h == "question" || h == "front" || h == "recto" || h == "q" -> questionCol = colIdx
+                    h == "answer" || h == "back" || h == "verso" || h == "a" || h == "reponse" || h == "réponse" -> answerCol = colIdx
+                    h == "context" || h == "contexte" || h == "notes" || h == "note" || h == "extra" -> contextCol = colIdx
+                    h == "deck" || h == "source" || h == "paquet" || h == "category" -> deckCol = colIdx
+                }
+            }
+        }
+
         val dataRows = if (hasHeader) records.drop(1) else records
 
         dataRows.forEachIndexed { index, row ->
@@ -37,8 +56,11 @@ object CsvParser {
                 return@forEachIndexed
             }
 
-            val question = row[0].trim()
-            val answer = row[1].trim()
+            val question = row.getOrNull(questionCol)?.trim() ?: ""
+            val answer = row.getOrNull(answerCol)?.trim() ?: ""
+            val context = if (contextCol >= 0) row.getOrNull(contextCol)?.trim()?.ifBlank { null } else null
+            val rowDeck = if (deckCol >= 0) row.getOrNull(deckCol)?.trim()?.ifBlank { null } else null
+            val finalDeckName = rowDeck ?: defaultDeckName
 
             if (question.isEmpty() && answer.isEmpty()) {
                 ignoredCount++
@@ -51,7 +73,8 @@ object CsvParser {
                     id = cardId,
                     question = question,
                     answer = answer,
-                    deckName = deckName
+                    deckName = finalDeckName,
+                    context = context
                 )
             )
         }
@@ -63,8 +86,12 @@ object CsvParser {
         if (row.size < 2) return false
         val col0 = row[0].trim().lowercase()
         val col1 = row[1].trim().lowercase()
-        return (col0 == "question" || col0 == "front" || col0 == "recto") &&
-               (col1 == "answer" || col1 == "back" || col1 == "verso")
+        return (col0 == "question" || col0 == "front" || col0 == "recto" || col0 == "q") &&
+               (col1 == "answer" || col1 == "back" || col1 == "verso" || col1 == "a" || col1 == "reponse" || col1 == "réponse") ||
+               row.any { cell ->
+                   val c = cell.trim().lowercase()
+                   c == "question" || c == "answer" || c == "context" || c == "contexte" || c == "deck" || c == "source"
+               }
     }
 
     /**

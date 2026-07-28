@@ -1,22 +1,28 @@
 package com.notebooklm.flashcards.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.notebooklm.flashcards.data.model.DeckSummary
@@ -30,8 +36,18 @@ fun DeckListScreen(
     totalDueAllDecks: Int,
     onRequestStoragePermission: () -> Unit,
     onRefreshDecks: () -> Unit,
-    onStartReview: (deckName: String?) -> Unit
+    onStartReview: (deckName: String?) -> Unit,
+    onImportCsvUri: (Uri) -> Unit,
+    onDeleteDeck: (deckName: String) -> Unit
 ) {
+    val csvPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onImportCsvUri(uri)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,7 +81,29 @@ fun DeckListScreen(
                 onRequestStoragePermission = onRequestStoragePermission
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // NotebookLM CSV Import Button
+            FilledTonalButton(
+                onClick = { csvPickerLauncher.launch("*/*") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Icon(Icons.Default.UploadFile, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Importer CSV NotebookLM",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Global Review Button
             if (totalDueAllDecks > 0) {
@@ -87,7 +125,7 @@ fun DeckListScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             Text(
@@ -107,9 +145,10 @@ fun DeckListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Aucun fichier flashcards.csv trouvé dans VoiceNotes.\nPlacez un fichier CSV dans /sdcard/Documents/VoiceNotes",
+                        "Aucun paquet trouvé.\nUtilisez le bouton 'Importer CSV NotebookLM' ci-dessus pour importer des cartes.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
@@ -117,10 +156,11 @@ fun DeckListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    items(decks) { deck ->
+                    items(decks, key = { it.deckName }) { deck ->
                         DeckItemCard(
                             deck = deck,
-                            onStartReview = { onStartReview(deck.deckName) }
+                            onStartReview = { onStartReview(deck.deckName) },
+                            onDeleteDeck = { onDeleteDeck(deck.deckName) }
                         )
                     }
                 }
@@ -140,7 +180,7 @@ private fun StorageStatusCard(
             containerColor = when (storageMode) {
                 is StorageAccessMode.Direct -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
                 is StorageAccessMode.Saf -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-                StorageAccessMode.None -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                StorageAccessMode.None -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             }
         ),
         modifier = Modifier.fillMaxWidth()
@@ -152,9 +192,9 @@ private fun StorageStatusCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = if (storageMode is StorageAccessMode.None) Icons.Default.Warning else Icons.Default.Folder,
+                imageVector = if (storageMode is StorageAccessMode.None) Icons.Default.Folder else Icons.Default.Folder,
                 contentDescription = null,
-                tint = if (storageMode is StorageAccessMode.None) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )
 
@@ -165,7 +205,7 @@ private fun StorageStatusCard(
                     text = when (storageMode) {
                         is StorageAccessMode.Direct -> "Accès Direct Coffre (/sdcard/Documents/VoiceNotes)"
                         is StorageAccessMode.Saf -> "Accès Coffre via SAF"
-                        StorageAccessMode.None -> "Accès au Coffre Requis"
+                        StorageAccessMode.None -> "Stockage Interne Autonome"
                     },
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
@@ -173,9 +213,9 @@ private fun StorageStatusCard(
                 )
                 Text(
                     text = when (storageMode) {
-                        is StorageAccessMode.Direct -> "Permission All Files Access active (vitesse maximale)"
+                        is StorageAccessMode.Direct -> "Permission All Files Access active"
                         is StorageAccessMode.Saf -> "Mode de repli SAF configuré"
-                        StorageAccessMode.None -> "Autorisez l'accès pour lire les fichiers CSV et sauvegarder les révisions FSRS"
+                        StorageAccessMode.None -> "Les cartes sont sauvegardées localement. Cliquez pour synchroniser avec un dossier Obsidian."
                     },
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -188,7 +228,7 @@ private fun StorageStatusCard(
                     onClick = onRequestStoragePermission,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text("Autoriser", fontSize = 12.sp)
+                    Text("Connecter Coffre", fontSize = 12.sp)
                 }
             }
         }
@@ -198,8 +238,35 @@ private fun StorageStatusCard(
 @Composable
 private fun DeckItemCard(
     deck: DeckSummary,
-    onStartReview: () -> Unit
+    onStartReview: () -> Unit,
+    onDeleteDeck: () -> Unit
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Supprimer le paquet") },
+            text = { Text("Voulez-vous vraiment supprimer le paquet '${deck.deckName}' et ses ${deck.totalCards} cartes ?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteDeck()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Supprimer", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -225,14 +292,26 @@ private fun DeckItemCard(
                     modifier = Modifier.weight(1f)
                 )
 
-                Button(
-                    onClick = onStartReview,
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Supprimer le paquet",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Réviser", fontSize = 14.sp)
+
+                    Button(
+                        onClick = onStartReview,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Réviser", fontSize = 14.sp)
+                    }
                 }
             }
 

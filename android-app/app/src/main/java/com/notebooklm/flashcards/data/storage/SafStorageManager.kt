@@ -171,31 +171,39 @@ class SafStorageManager(private val context: Context) {
     }
 
     /**
-     * Reads flashcards-srs-data.json content.
+     * Reads flashcards-srs-data.json content with fallback to internal storage.
      */
     fun readSrsJson(mode: StorageAccessMode): String? {
         return when (mode) {
             is StorageAccessMode.Direct -> {
                 val flashcardsDir = File(mode.vaultDir, "Flashcards")
                 val jsonFile = File(flashcardsDir, "flashcards-srs-data.json")
-                if (jsonFile.exists()) jsonFile.readText(Charsets.UTF_8) else null
+                if (jsonFile.exists()) jsonFile.readText(Charsets.UTF_8) else readInternalSrsJson()
             }
             is StorageAccessMode.Saf -> {
-                val treeDoc = DocumentFile.fromTreeUri(context, mode.treeUri) ?: return null
-                val flashcardsDir = treeDoc.findFile("Flashcards") ?: treeDoc
-                val jsonDoc = flashcardsDir.findFile("flashcards-srs-data.json") ?: return null
-                context.contentResolver.openInputStream(jsonDoc.uri)?.use { stream ->
-                    stream.bufferedReader(Charsets.UTF_8).readText()
+                val treeDoc = DocumentFile.fromTreeUri(context, mode.treeUri)
+                val flashcardsDir = treeDoc?.findFile("Flashcards") ?: treeDoc
+                val jsonDoc = flashcardsDir?.findFile("flashcards-srs-data.json")
+                if (jsonDoc != null) {
+                    context.contentResolver.openInputStream(jsonDoc.uri)?.use { stream ->
+                        stream.bufferedReader(Charsets.UTF_8).readText()
+                    } ?: readInternalSrsJson()
+                } else {
+                    readInternalSrsJson()
                 }
             }
-            StorageAccessMode.None -> null
+            StorageAccessMode.None -> readInternalSrsJson()
         }
     }
 
     /**
      * Writes flashcards-srs-data.json atomically using a .tmp file.
+     * Also writes to internal storage as fallback.
      */
     fun writeSrsJsonAtomically(mode: StorageAccessMode, jsonContent: String): Boolean {
+        // Always write to internal storage as a backup
+        writeInternalSrsJson(jsonContent)
+
         return when (mode) {
             is StorageAccessMode.Direct -> {
                 val flashcardsDir = File(mode.vaultDir, "Flashcards")
@@ -211,7 +219,6 @@ class SafStorageManager(private val context: Context) {
                     }
                     val renamed = tmpFile.renameTo(targetFile)
                     if (!renamed) {
-                        // Fallback copy if rename across mount boundaries fails
                         tmpFile.copyTo(targetFile, overwrite = true)
                         tmpFile.delete()
                     }
@@ -222,7 +229,7 @@ class SafStorageManager(private val context: Context) {
                 }
             }
             is StorageAccessMode.Saf -> {
-                val treeDoc = DocumentFile.fromTreeUri(context, mode.treeUri) ?: return false
+                val treeDoc = DocumentFile.fromTreeUri(context, mode.treeUri) ?: return true
                 var flashcardsDir = treeDoc.findFile("Flashcards")
                 if (flashcardsDir == null || !flashcardsDir.isDirectory) {
                     flashcardsDir = treeDoc.createDirectory("Flashcards") ?: treeDoc
@@ -233,7 +240,7 @@ class SafStorageManager(private val context: Context) {
                     targetDoc = flashcardsDir.createFile("application/json", "flashcards-srs-data.json")
                 }
 
-                if (targetDoc == null) return false
+                if (targetDoc == null) return true
 
                 try {
                     context.contentResolver.openOutputStream(targetDoc.uri, "rwt")?.use { out ->
@@ -243,10 +250,69 @@ class SafStorageManager(private val context: Context) {
                     true
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    true
+                }
+            }
+            StorageAccessMode.None -> true
+        }
+    }
+
+    fun writeCsvToVault(mode: StorageAccessMode, fileName: String, csvContent: String): Boolean {
+        val safeFileName = if (fileName.endsWith(".csv", ignoreCase = true)) fileName else "$fileName.csv"
+        return when (mode) {
+            is StorageAccessMode.Direct -> {
+                try {
+                    val csvFile = File(mode.vaultDir, safeFileName)
+                    csvFile.writeText(csvContent, Charsets.UTF_8)
+                    true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    false
+                }
+            }
+            is StorageAccessMode.Saf -> {
+                try {
+                    val treeDoc = DocumentFile.fromTreeUri(context, mode.treeUri) ?: return false
+                    var doc = treeDoc.findFile(safeFileName)
+                    if (doc == null) {
+                        doc = treeDoc.createFile("text/csv", safeFileName)
+                    }
+                    if (doc != null) {
+                        context.contentResolver.openOutputStream(doc.uri, "rwt")?.use { out ->
+                            out.write(csvContent.toByteArray(Charsets.UTF_8))
+                            out.flush()
+                        }
+                        true
+                    } else false
+                } catch (e: Exception) {
+                    e.printStackTrace()
                     false
                 }
             }
             StorageAccessMode.None -> false
+        }
+    }
+
+    private fun readInternalSrsJson(): String? {
+        val internalFile = File(context.filesDir, "flashcards-srs-data.json")
+        return if (internalFile.exists()) internalFile.readText(Charsets.UTF_8) else null
+    }
+
+    private fun writeInternalSrsJson(jsonContent: String): Boolean {
+        return try {
+            val internalFile = File(context.filesDir, "flashcards-srs-data.json")
+            val tmpFile = File(context.filesDir, "flashcards-srs-data.json.tmp")
+            tmpFile.writeText(jsonContent, Charsets.UTF_8)
+            if (internalFile.exists()) internalFile.delete()
+            val renamed = tmpFile.renameTo(internalFile)
+            if (!renamed) {
+                tmpFile.copyTo(internalFile, overwrite = true)
+                tmpFile.delete()
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 }

@@ -10,7 +10,8 @@ data class CsvCard(
     val id: String,
     val question: String,
     val answer: String,
-    val deckName: String
+    val deckName: String,
+    val context: String? = null
 )
 
 /**
@@ -43,6 +44,7 @@ data class SrsCardRecord(
     val deck: String,
     val question: String,
     val answer: String,
+    val context: String? = null,
     val state: Int = CardState.NEW,
     val due: String, // ISO-8601 string
     val stability: Double = 0.4,

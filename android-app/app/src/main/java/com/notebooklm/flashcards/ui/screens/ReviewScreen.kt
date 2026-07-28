@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,10 +36,12 @@ import com.notebooklm.flashcards.ui.theme.RatingHardColor
 fun ReviewScreen(
     dueCards: List<SrsCardRecord>,
     onRecordReview: (cardId: String, rating: Rating) -> Unit,
+    onDeleteCard: (cardId: String) -> Unit,
     onFinishSession: () -> Unit
 ) {
     var currentIndex by remember { mutableIntStateOf(0) }
     var isAnswerRevealed by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (dueCards.isEmpty() || currentIndex >= dueCards.size) {
         ReviewCompletedScreen(onFinishSession = onFinishSession)
@@ -48,6 +51,31 @@ fun ReviewScreen(
     val currentCard = dueCards[currentIndex]
     val intervalPreview = remember(currentCard) {
         FSRSScheduler.previewIntervals(currentCard)
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Supprimer la carte") },
+            text = { Text("Voulez-vous vraiment supprimer cette carte de vos révisions ?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteCard(currentCard.id)
+                        isAnswerRevealed = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Supprimer", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annuler")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -70,6 +98,15 @@ fun ReviewScreen(
                 navigationIcon = {
                     IconButton(onClick = onFinishSession) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Retour")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Supprimer la carte",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -131,6 +168,22 @@ fun ReviewScreen(
                         text = currentCard.question,
                         textSizeSp = 19f
                     )
+
+                    if (!currentCard.context.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "CONTEXTE",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        MathMarkdownText(
+                            text = currentCard.context,
+                            textSizeSp = 14f
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
